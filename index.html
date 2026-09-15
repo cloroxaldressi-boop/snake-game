@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لعبة الثعبان</title>
+    <style>
+        body {
+            background-color: #121212;
+            color: #fff;
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            text-align: center;
+        }
+        h1 { 
+            margin-bottom: 5px;
+            font-size: 2.5em;
+        }
+        .stats {
+            display: flex;
+            justify-content: center;
+            gap: 40px;
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+        .stat {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        .stat-label {
+            font-size: 12px;
+            color: #999;
+            text-transform: uppercase;
+        }
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+        }
+        canvas {
+            background-color: #000;
+            border: 2px solid #4CAF50;
+            box-shadow: 0 0 20px rgba(76, 175, 80, 0.5);
+            display: block;
+            margin: 0 auto;
+        }
+        .controls {
+            margin-top: 20px;
+            display: grid;
+            grid-template-columns: repeat(3, 60px);
+            gap: 10px;
+            justify-content: center;
+        }
+        button {
+            width: 60px;
+            height: 60px;
+            font-size: 20px;
+            background-color: #333;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        button:hover {
+            background-color: #444;
+        }
+        button:active { 
+            background-color: #555; 
+        }
+        .up { grid-column: 2; }
+        .left { grid-column: 1; grid-row: 2; }
+        .down { grid-column: 2; grid-row: 2; }
+        .right { grid-column: 3; grid-row: 2; }
+
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+        .btn-primary {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.2s;
+        }
+        .btn-primary:hover {
+            background-color: #45a049;
+        }
+        .btn-primary:disabled {
+            background-color: #999;
+            cursor: not-allowed;
+        }
+        .difficulty-selector {
+            margin-top: 15px;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .difficulty-selector button {
+            width: auto;
+            padding: 8px 16px;
+            background-color: #333;
+            border: 2px solid transparent;
+            transition: all 0.2s;
+        }
+        .difficulty-selector button.active {
+            background-color: #4CAF50;
+            border-color: #fff;
+        }
+        .difficulty-selector button:hover {
+            border-color: #4CAF50;
+        }
+        #pauseNotif {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background-color: #4CAF50;
+            padding: 15px 25px;
+            border-radius: 8px;
+            display: none;
+            font-size: 18px;
+            font-weight: bold;
+            animation: slideIn 0.3s ease;
+        }
+        @keyframes slideIn {
+            from {
+                transform: translateX(-100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="pauseNotif">⏸️ اللعبة موقوفة</div>
+    <div class="container">
+        <h1>لعبة الثعبان 🐍</h1>
+        
+        <div class="stats">
+            <div class="stat">
+                <div class="stat-label">النقاط الحالية</div>
+                <div class="stat-value" id="score">0</div>
+            </div>
+            <div class="stat">
+                <div class="stat-label">أفضل نقاط</div>
+                <div class="stat-value" id="highScore">0</div>
+            </div>
+        </div>
+
+        <canvas id="gameCanvas" width="300" height="300"></canvas>
+
+        <!-- أزرار التحكم -->
+        <div class="controls">
+            <button class="up" onclick="changeDir('UP')">⬆️</button>
+            <button class="left" onclick="changeDir('LEFT')">⬅️</button>
+            <button class="down" onclick="changeDir('DOWN')">⬇️</button>
+            <button class="right" onclick="changeDir('RIGHT')">➡️</button>
+        </div>
+
+        <!-- اختيار مستوى الصعوبة -->
+        <div class="difficulty-selector">
+            <button onclick="setDifficulty('easy')" class="active">سهل</button>
+            <button onclick="setDifficulty('medium')">متوسط</button>
+            <button onclick="setDifficulty('hard')">صعب</button>
+        </div>
+
+        <!-- أزرار الإجراءات -->
+        <div class="action-buttons">
+            <button class="btn-primary" id="pauseBtn" onclick="togglePause()">⏸️ إيقاف</button>
+            <button class="btn-primary" onclick="resetGame()">🔄 لعبة جديدة</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+        const box = 15;
+        
+        let score = 0;
+        let highScore = localStorage.getItem("snakeHighScore") || 0;
+        let isPaused = false;
+        let gameActive = true;
+        let difficulty = "medium";
+
+        const difficulties = {
+            easy: 150,
+            medium: 100,
+            hard: 60
+        };
+
+        let snake = [{ x: 9 * box, y: 10 * box }];
+        let food = generateFood();
+        let dir = "RIGHT";
+        let nextDir = "RIGHT";
+
+        document.addEventListener("keydown", handleKeyDown);
+        updateHighScore();
+
+        function handleKeyDown(event) {
+            const keyMap = { 37: "LEFT", 38: "UP", 39: "RIGHT", 40: "DOWN" };
+            if (keyMap[event.keyCode]) {
+                event.preventDefault();
+                nextDir = keyMap[event.keyCode];
+            }
+        }
+
+        function changeDir(newDir) {
+            nextDir = newDir;
+        }
+
+        function setDifficulty(level) {
+            if (gameActive) {
+                difficulty = level;
+                document.querySelectorAll(".difficulty-selector button").forEach(btn => {
+                    btn.classList.remove("active");
+                });
+                event.target.classList.add("active");
+                clearInterval(game);
+                game = setInterval(draw, difficulties[difficulty]);
+            }
+        }
+
+        function togglePause() {
+            if (!gameActive) return;
+            isPaused = !isPaused;
+            document.getElementById("pauseNotif").style.display = isPaused ? "block" : "none";
+            document.getElementById("pauseBtn").textContent = isPaused ? "▶️ استئناف" : "⏸️ إيقاف";
+        }
+
+        function generateFood() {
+            return {
+                x: Math.floor(Math.random() * 19 + 1) * box,
+                y: Math.floor(Math.random() * 19 + 1) * box
+            };
+        }
+
+        function updateHighScore() {
+            document.getElementById("highScore").innerText = highScore;
+        }
+
+        function draw() {
+            if (isPaused) return;
+
+            ctx.fillStyle = "#000";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw snake
+            for (let i = 0; i < snake.length; i++) {
+                ctx.fillStyle = (i == 0) ? "#4CAF50" : "#81C784";
+                ctx.fillRect(snake[i].x, snake[i].y, box, box);
+                ctx.strokeStyle = "#2E7D32";
+                ctx.lineWidth = 1;
+                ctx.strokeRect(snake[i].x, snake[i].y, box, box);
+            }
+
+            // Draw food
+            ctx.fillStyle = "#FF5252";
+            ctx.fillRect(food.x, food.y, box, box);
+            ctx.fillStyle = "#FF8A80";
+            ctx.fillRect(food.x + 3, food.y + 3, box - 6, box - 6);
+
+            let snakeX = snake[0].x;
+            let snakeY = snake[0].y;
+
+            // Prevent 180-degree turns
+            if (nextDir == "LEFT" && dir != "RIGHT") dir = "LEFT";
+            if (nextDir == "UP" && dir != "DOWN") dir = "UP";
+            if (nextDir == "RIGHT" && dir != "LEFT") dir = "RIGHT";
+            if (nextDir == "DOWN" && dir != "UP") dir = "DOWN";
+
+            if (dir == "LEFT") snakeX -= box;
+            if (dir == "UP") snakeY -= box;
+            if (dir == "RIGHT") snakeX += box;
+            if (dir == "DOWN") snakeY += box;
+
+            // Check food collision
+            if (snakeX == food.x && snakeY == food.y) {
+                score++;
+                document.getElementById("score").innerText = score;
+                food = generateFood();
+            } else {
+                snake.pop();
+            }
+
+            let newHead = { x: snakeX, y: snakeY };
+
+            // Check collision
+            if (snakeX < 0 || snakeY < 0 || snakeX >= canvas.width || snakeY >= canvas.height || collision(newHead, snake)) {
+                endGame();
+                return;
+            }
+
+            snake.unshift(newHead);
+        }
+
+        function collision(head, array) {
+            for (let i = 0; i < array.length; i++) {
+                if (head.x == array[i].x && head.y == array[i].y) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function endGame() {
+            gameActive = false;
+            clearInterval(game);
+            
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem("snakeHighScore", highScore);
+                updateHighScore();
+            }
+
+            alert(`انتهت اللعبة!\nمجموع النقاط: ${score}\nأفضل نقاط: ${highScore}`);
+        }
+
+        function resetGame() {
+            gameActive = true;
+            isPaused = false;
+            score = 0;
+            dir = "RIGHT";
+            nextDir = "RIGHT";
+            snake = [{ x: 9 * box, y: 10 * box }];
+            food = generateFood();
+            document.getElementById("score").innerText = "0";
+            document.getElementById("pauseNotif").style.display = "none";
+            document.getElementById("pauseBtn").textContent = "⏸️ إيقاف";
+            clearInterval(game);
+            game = setInterval(draw, difficulties[difficulty]);
+        }
+
+        let game = setInterval(draw, difficulties[difficulty]);
+    </script>
+</body>
+</html>
